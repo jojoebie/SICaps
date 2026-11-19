@@ -1,0 +1,837 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Prototipe Pemantau Status MIFM</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;600&display=swap" rel="stylesheet">
+<style>
+/* Layout: harness (panel penguji kiri) + ponsel 390x844 di tengah. Satu tema terang, disengaja. */
+:root{
+  --ink:#16212c;
+  --ink-2:#4a5866;
+  --line:#d9dfe5;
+  --paper:#ffffff;
+  --ground:#eef1f4;
+  --accent:#0d6b57;        /* hijau-teal layanan */
+  --accent-ink:#ffffff;
+  --accent-soft:#e3f2ee;
+  --st-diajukan:#566372;   --st-diajukan-bg:#eceff2;
+  --st-terbit:#8a5a00;     --st-terbit-bg:#fff2d6;
+  --st-setuju:#1f6b3c;     --st-setuju-bg:#dff3e6;
+  --st-batal:#b42318;      --st-batal-bg:#fde7e5;
+  --wa-head:#0b5c4f; --wa-wall:#efe9e0; --wa-out:#d9fdd3; --wa-in:#ffffff;
+  --sim:#5b3fd6; --sim-bg:#f1edff;
+  --harness:#1b2430; --harness-2:#26313f; --harness-ink:#e8edf2; --harness-mute:#9aa8b6;
+  --f-ui:"Plus Jakarta Sans", ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+  --f-mono:"JetBrains Mono", ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  color-scheme: light;
+}
+*{box-sizing:border-box}
+html,body{height:100%;margin:0}
+body{background:var(--harness);color:var(--ink);font-family:var(--f-ui);font-size:15px;line-height:1.45;-webkit-font-smoothing:antialiased}
+button,input,select,textarea{font:inherit;color:inherit}
+:focus-visible{outline:3px solid #7aa7ff;outline-offset:2px;border-radius:6px}
+@media (prefers-reduced-motion: reduce){*{animation:none!important;transition:none!important}}
+
+/* ---------- Harness ---------- */
+.harness{display:grid;grid-template-columns:360px 1fr;height:100%}
+.harness.panel-off{grid-template-columns:0 1fr}
+.panel{background:var(--harness-2);color:var(--harness-ink);overflow:auto;padding:22px 20px 28px;display:flex;flex-direction:column;gap:18px;border-right:1px solid #344152}
+.panel-off .panel{display:none}
+.panel h1{font-size:18px;margin:0;letter-spacing:-.01em;text-wrap:balance}
+.panel h2{font-size:12px;letter-spacing:.08em;text-transform:uppercase;color:var(--harness-mute);margin:0 0 8px;font-weight:700}
+.panel p{margin:0;color:#c9d3dd;font-size:13.5px}
+.panel .kicker{font-family:var(--f-mono);font-size:11.5px;color:var(--harness-mute)}
+.task{background:#1f2935;border:1px solid #3a4758;border-radius:12px;padding:14px;font-size:13.5px;color:#dbe3ea}
+.task ol{margin:8px 0 0;padding-left:20px;display:flex;flex-direction:column;gap:6px}
+.task li.done{color:#8fe0b9}
+.task li.done::marker{content:"✓  "}
+.row{display:flex;gap:8px;flex-wrap:wrap}
+.hbtn{background:#33414f;border:1px solid #4a596a;color:var(--harness-ink);border-radius:9px;padding:8px 12px;font-size:13px;font-weight:600;cursor:pointer;min-height:36px}
+.hbtn:hover{background:#3d4d5e}
+.hbtn.on{background:#e8edf2;color:#16212c;border-color:#e8edf2}
+.hbtn.go{background:#8fe0b9;color:#0e2a1f;border-color:#8fe0b9}
+.seg{display:inline-flex;border:1px solid #4a596a;border-radius:9px;overflow:hidden}
+.seg button{border:0;border-radius:0;background:transparent;color:var(--harness-ink);padding:8px 12px;font-size:13px;font-weight:600;cursor:pointer}
+.seg button[aria-pressed="true"]{background:#e8edf2;color:#16212c}
+.panel select{background:#1f2935;border:1px solid #4a596a;border-radius:9px;padding:8px;color:var(--harness-ink);width:100%}
+.log{font-family:var(--f-mono);font-size:11.5px;background:#141b23;border:1px solid #344152;border-radius:10px;padding:10px;max-height:220px;overflow:auto;display:flex;flex-direction:column;gap:3px;color:#b8c4cf}
+.log .m{color:#ffb4a8}
+.log .s{color:#8fe0b9}
+.panel textarea{width:100%;min-height:70px;background:#1f2935;border:1px solid #4a596a;border-radius:9px;padding:8px;color:var(--harness-ink);font-size:13px;resize:vertical}
+.summary{white-space:pre-wrap;font-family:var(--f-mono);font-size:11.5px;background:#141b23;border:1px solid #344152;border-radius:10px;padding:10px;color:#dbe3ea;max-height:260px;overflow:auto}
+.stats{display:grid;grid-template-columns:repeat(3,1fr);gap:8px}
+.stat{background:#1f2935;border:1px solid #3a4758;border-radius:10px;padding:8px 10px}
+.stat b{display:block;font-size:18px;font-variant-numeric:tabular-nums}
+.stat span{font-size:11px;color:var(--harness-mute)}
+
+.stage{position:relative;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:12px;padding:20px;overflow:auto}
+.caption{color:var(--harness-mute);font-size:12px;margin:0;text-align:center}
+.reopen{position:fixed;left:14px;top:14px;z-index:50;display:none}
+.panel-off .reopen{display:inline-flex}
+
+/* ---------- Phone ---------- */
+.phone{position:relative;width:390px;height:844px;flex:none;background:var(--ground);border-radius:46px;box-shadow:0 0 0 10px #0c1117,0 0 0 11px #3b4757,0 30px 60px rgba(0,0,0,.45);overflow:hidden;transition:filter .2s}
+.screen{position:absolute;inset:0;display:flex;flex-direction:column;overflow:hidden}
+.scroll{flex:1;overflow-y:auto;overflow-x:hidden;-webkit-overflow-scrolling:touch}
+.wf .phone{filter:grayscale(1) contrast(1.05)}
+body.wf{--accent:#444;--accent-soft:#e6e6e6;--wa-head:#555;--wa-wall:#f2f2f2;--wa-out:#e9e9e9;--sim:#333;--sim-bg:#ededed;
+  --st-diajukan:#333;--st-diajukan-bg:#e6e6e6;--st-terbit:#333;--st-terbit-bg:#e6e6e6;--st-setuju:#111;--st-setuju-bg:#d4d4d4;--st-batal:#111;--st-batal-bg:#d4d4d4}
+.wf .phone .card,.wf .phone .bub,.wf .phone .btn,.wf .phone .field input{border:1.5px solid #888}
+.wf .phone .box,.wf .phone .tag,.wf .phone .warnchip,.wf .phone .banner-ok,.wf .phone .infostrip{background:#eee!important;color:#222!important;border:1px dashed #888}
+.wf .phone *{box-shadow:none!important}
+.wf .phone img,.wf .phone .logo-mark{opacity:.6}
+
+/* ---------- Web app (Pemantau) ---------- */
+.appbar{display:flex;align-items:center;justify-content:space-between;gap:10px;padding:18px 18px 12px;background:var(--paper);border-bottom:1px solid var(--line)}
+.brand{display:flex;align-items:center;gap:9px;font-weight:800;font-size:15px;letter-spacing:-.01em}
+.logo-mark{width:30px;height:30px;border-radius:9px;background:var(--accent);display:grid;place-items:center;color:#fff}
+.linkbtn{background:none;border:0;color:var(--accent);font-weight:700;font-size:14px;cursor:pointer;padding:10px 6px;min-height:44px}
+.backbtn{display:inline-flex;align-items:center;gap:4px;background:none;border:0;color:var(--ink);font-weight:600;cursor:pointer;padding:8px 4px;min-height:44px;font-size:14px}
+.pad{padding:20px 18px 28px;display:flex;flex-direction:column;gap:18px}
+.hero h1{font-size:26px;line-height:1.18;letter-spacing:-.02em;margin:4px 0 8px;text-wrap:balance}
+.hero p{margin:0;color:var(--ink-2);font-size:15px}
+.btn{display:inline-flex;align-items:center;justify-content:center;gap:8px;border-radius:14px;min-height:52px;padding:0 18px;font-weight:700;font-size:16px;cursor:pointer;border:1.5px solid transparent;width:100%}
+.btn-primary{background:var(--accent);color:var(--accent-ink)}
+.btn-primary:active{transform:translateY(1px)}
+.btn-ghost{background:var(--paper);border-color:var(--line);color:var(--ink)}
+.btn-sm{min-height:44px;font-size:14px;border-radius:12px}
+.card{background:var(--paper);border:1px solid var(--line);border-radius:16px;padding:16px}
+.sec-title{font-size:13px;font-weight:800;letter-spacing:.06em;text-transform:uppercase;color:var(--ink-2);margin:0 0 10px}
+.dict{display:flex;flex-direction:column;gap:12px;margin:0;padding:0;list-style:none}
+.dict li{display:grid;grid-template-columns:116px 1fr;gap:10px;align-items:start;font-size:14px}
+.pill{display:inline-flex;align-items:center;gap:5px;border-radius:999px;padding:4px 10px;font-size:12px;font-weight:800;letter-spacing:.02em;white-space:nowrap;text-transform:uppercase;width:max-content}
+.pill svg{flex:none}
+.p-diajukan{background:var(--st-diajukan-bg);color:var(--st-diajukan)}
+.p-terbit{background:var(--st-terbit-bg);color:var(--st-terbit)}
+.p-setuju{background:var(--st-setuju-bg);color:var(--st-setuju)}
+.p-batal{background:var(--st-batal-bg);color:var(--st-batal)}
+.p-wait{background:#eef0f3;color:#5b6573}
+.p-hidden{background:#f3f0ea;color:#6b5d45}
+.lock-note{display:block;font-weight:700}
+.infostrip{display:flex;gap:10px;align-items:flex-start;background:var(--accent-soft);border-radius:14px;padding:12px 14px;font-size:14px;color:#164d40}
+.fine{font-size:12.5px;color:var(--ink-2);margin:0}
+.times{font-family:var(--f-mono);font-weight:600;font-variant-numeric:tabular-nums}
+
+/* form */
+.field{display:flex;flex-direction:column;gap:6px}
+.field label{font-weight:700;font-size:14px}
+.field .opt{font-weight:500;color:var(--ink-2)}
+.field input,.field select{border:1.5px solid var(--line);background:#fff;border-radius:12px;min-height:48px;padding:10px 12px;font-size:16px;width:100%}
+.field input:focus{border-color:var(--accent);outline:none;box-shadow:0 0 0 3px var(--accent-soft)}
+.field .help{font-size:12.5px;color:var(--ink-2)}
+.field.err input{border-color:var(--st-batal)}
+.field .errmsg{font-size:12.5px;color:var(--st-batal);font-weight:600}
+.two{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+.ajuan{display:flex;flex-direction:column;gap:14px}
+.ajuan-head{display:flex;justify-content:space-between;align-items:center}
+.ajuan-head h3{margin:0;font-size:15px}
+.xbtn{background:none;border:0;color:var(--st-batal);font-weight:700;font-size:13px;cursor:pointer;min-height:40px;padding:0 6px}
+.addbtn{border:1.5px dashed #9fb1bf;background:transparent;color:var(--accent);border-radius:14px;min-height:50px;font-weight:700;cursor:pointer;font-size:15px}
+.callout{display:flex;gap:10px;background:#f5f7f9;border:1px solid var(--line);border-radius:12px;padding:10px 12px;font-size:13px;color:var(--ink-2)}
+.formerr{background:var(--st-batal-bg);color:var(--st-batal);border-radius:12px;padding:10px 12px;font-size:13.5px;font-weight:600}
+
+/* list */
+.banner-ok{display:flex;gap:10px;align-items:flex-start;background:var(--st-setuju-bg);color:#174f2d;border-radius:14px;padding:12px 14px;font-size:14px}
+.mcard{display:flex;flex-direction:column;gap:10px}
+.mcard h3{margin:0;font-size:16px;letter-spacing:-.01em}
+.meta{display:flex;flex-direction:column;gap:2px;font-size:13.5px;color:var(--ink-2)}
+.statusline{display:flex;flex-direction:column;gap:6px;border-top:1px solid var(--line);padding-top:10px}
+.statusline .why{font-size:13.5px}
+.chk{font-size:12px;color:var(--ink-2)}
+.warnchip{display:flex;gap:8px;align-items:flex-start;background:#fff4e5;border:1px solid #f3c98b;color:#7a4700;border-radius:10px;padding:8px 10px;font-size:13px;font-weight:600}
+.histbtn{align-self:flex-start;background:none;border:0;color:var(--accent);font-weight:700;font-size:13.5px;cursor:pointer;padding:6px 0;min-height:40px}
+.hist{list-style:none;margin:0;padding:0 0 0 12px;border-left:2px solid var(--line);display:flex;flex-direction:column;gap:6px;font-size:13px}
+.hist time{font-family:var(--f-mono);font-size:11.5px;color:var(--ink-2);display:block}
+.empty{text-align:center;color:var(--ink-2);padding:30px 10px}
+
+/* simulation controls: clearly not part of the product */
+.simbar{border-top:2px dashed var(--sim);background:var(--sim-bg);padding:10px 14px 16px;display:flex;flex-direction:column;gap:8px}
+.simlabel{display:flex;justify-content:space-between;align-items:center;font-family:var(--f-mono);font-size:11px;font-weight:600;color:var(--sim);letter-spacing:.04em;text-transform:uppercase}
+.simbtn{background:var(--sim);color:#fff;border:0;border-radius:12px;min-height:46px;padding:0 14px;font-weight:700;cursor:pointer;font-size:14.5px;width:100%}
+.simbtn.alt{background:#fff;color:var(--sim);border:1.5px solid var(--sim)}
+.simgrid{display:grid;grid-template-columns:1fr;gap:8px}
+
+/* ---------- WhatsApp simulation ---------- */
+.wa-head{background:var(--wa-head);color:#fff;display:flex;align-items:center;gap:10px;padding:16px 12px 12px}
+.wa-head .back{background:none;border:0;color:#fff;cursor:pointer;min-height:44px;min-width:36px;display:grid;place-items:center}
+.avatar{width:38px;height:38px;border-radius:50%;display:grid;place-items:center;font-weight:800;font-size:14px;flex:none}
+.wa-title{display:flex;flex-direction:column;line-height:1.2;min-width:0}
+.wa-title b{font-size:15.5px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.wa-title span{font-size:12px;opacity:.85}
+.wa-wall{background:var(--wa-wall);background-image:radial-gradient(rgba(0,0,0,.035) 1px,transparent 1px);background-size:14px 14px}
+.wa-list{padding:12px 10px 18px;display:flex;flex-direction:column;gap:6px}
+.day{align-self:center;background:#e1f3fb;color:#3b5562;font-size:11.5px;font-weight:700;border-radius:8px;padding:4px 10px;margin:8px 0 4px;text-transform:uppercase;letter-spacing:.03em}
+.sysnote{align-self:center;background:var(--sim-bg);color:var(--sim);border:1px dashed var(--sim);font-size:12px;border-radius:8px;padding:5px 10px;max-width:86%;text-align:center}
+.bub{max-width:86%;background:var(--wa-in);border-radius:10px;padding:7px 9px 5px;font-size:14.2px;line-height:1.42;box-shadow:0 1px 0.5px rgba(0,0,0,.13);position:relative;word-wrap:break-word}
+.bub.out{align-self:flex-end;background:var(--wa-out)}
+.bub .who{font-size:12.5px;font-weight:700;margin-bottom:2px}
+.bub .ts{display:block;text-align:right;font-size:10.5px;color:#667781;margin-top:2px}
+.bub p{margin:0 0 6px}
+.bub p:last-of-type{margin-bottom:2px}
+.bub .tag{display:inline-block;font-weight:800;font-size:12px;letter-spacing:.03em;border-radius:6px;padding:2px 7px;margin:2px 0 6px}
+.bub table{border-collapse:collapse;font-size:13.5px;margin:2px 0 6px}
+.bub td{padding:1px 8px 1px 0;vertical-align:top}
+.bub td:first-child{color:#54656f;white-space:nowrap}
+.bub .box{border-radius:8px;padding:7px 9px;margin:4px 0 6px;font-size:13.5px}
+.box.warn{background:#fff4e5;color:#6b3f00}
+.box.danger{background:#fde7e5;color:#7a1b13}
+.box.ok{background:#e4f6ea;color:#174f2d}
+.box.info{background:#eef3f6;color:#2c3e4a}
+.bub .quick{display:block;border-top:1px solid #e3e6e8;margin:8px -9px -5px;padding:10px 9px;text-align:center;color:#027eb5;font-weight:700;font-size:14px;background:none;border-left:0;border-right:0;border-bottom:0;width:calc(100% + 18px);cursor:pointer;border-radius:0 0 10px 10px}
+.linkcard{display:block;text-align:left;width:100%;background:#f0f2f5;border:0;border-left:4px solid var(--accent);border-radius:8px;padding:9px 10px;margin:4px 0 6px;cursor:pointer}
+.linkcard b{display:block;font-size:13.5px;color:#111b21}
+.linkcard span{display:block;font-size:12.5px;color:#54656f}
+.linkcard u{display:block;font-size:12.5px;color:#027eb5;text-decoration:none;margin-top:3px}
+.wa-input{display:flex;gap:8px;align-items:center;padding:8px 10px 16px;background:#f0f2f5}
+.wa-input div{flex:1;background:#fff;border-radius:22px;padding:10px 14px;color:#8696a0;font-size:14.5px}
+.typing{align-self:flex-start;background:#fff;border-radius:10px;padding:8px 12px;font-size:13px;color:#667781;box-shadow:0 1px .5px rgba(0,0,0,.13)}
+
+/* notification banner + toast */
+.notif{position:absolute;left:10px;right:10px;top:-120px;z-index:20;background:rgba(255,255,255,.97);border-radius:18px;box-shadow:0 10px 30px rgba(0,0,0,.25);padding:12px 14px;display:flex;gap:10px;align-items:flex-start;cursor:pointer;transition:top .35s cubic-bezier(.2,.8,.2,1);border:0;text-align:left;width:auto}
+.notif.show{top:12px}
+.notif .app{font-size:11.5px;color:#54656f;font-weight:700;text-transform:uppercase;letter-spacing:.04em}
+.notif b{display:block;font-size:14px}
+.notif span.t{display:block;font-size:13.5px;color:#3b4a54}
+.toast{position:absolute;left:50%;bottom:24px;transform:translateX(-50%) translateY(40px);opacity:0;background:#16212c;color:#fff;border-radius:12px;padding:10px 14px;font-size:13px;width:max-content;max-width:330px;transition:all .25s;z-index:30;pointer-events:none}
+.toast.show{opacity:1;transform:translateX(-50%) translateY(0)}
+
+/* mobile: phone fills screen, panel becomes a sheet */
+@media (max-width: 900px){
+  .harness{grid-template-columns:1fr;height:auto;min-height:100%}
+  .panel{position:fixed;inset:auto 0 0 0;max-height:78%;z-index:60;border-radius:18px 18px 0 0;border-right:0;box-shadow:0 -10px 30px rgba(0,0,0,.4)}
+  .harness:not(.sheet-open) .panel{display:none}
+  .stage{padding:0;min-height:100%}
+  .phone{width:100%;height:100dvh;max-height:100dvh;border-radius:0;box-shadow:none}
+  .caption{display:none}
+  .reopen{display:inline-flex!important;left:auto;right:10px;top:auto;bottom:10px;opacity:.85}
+}
+</style>
+</head>
+<body>
+<div class="harness" id="harness">
+  <aside class="panel" id="panel" aria-label="Panel penguji">
+    <div>
+      <div class="kicker">SI Capstone · Q3.03 · Clickable Prototype</div>
+      <h1>Pemantau Status MIFM</h1>
+      <p style="margin-top:6px">Panel ini untuk pengamat. Sembunyikan panel saat penguji mencoba, lalu buka lagi untuk melihat jejak klik.</p>
+    </div>
+
+    <section>
+      <h2>Skenario untuk penguji</h2>
+      <div class="task">
+        Kamu panitia acara ormawa. Surat peminjaman <b>Teater A</b> untuk <b>Seminar Nasional 2026</b> (Selasa, 24 Nov 2026, 08.00–12.00) baru diserahkan ke DITMAWA. Kamu tidak mau terus-terusan mengecek MIFM.
+        <ol id="taskList">
+          <li data-t="1">Daftarkan pengajuan ruanganmu agar dipantau.</li>
+          <li data-t="2">Periksa daftar pengajuanmu di halaman rekap.</li>
+          <li data-t="3">Dari pesan WhatsApp, temukan kapan ruanganmu benar-benar aman, dan apa yang harus dilakukan kalau muncul pesaing slot.</li>
+        </ol>
+      </div>
+    </section>
+
+    <section>
+      <h2>Kontrol sesi</h2>
+      <div class="row">
+        <button class="hbtn go" id="hStart" type="button">Mulai sesi uji baru</button>
+        <button class="hbtn" id="hHide" type="button">Sembunyikan panel</button>
+      </div>
+      <div class="row" style="margin-top:8px">
+        <div class="seg" role="group" aria-label="Tampilan">
+          <button type="button" id="vProto" aria-pressed="true">Prototype</button>
+          <button type="button" id="vWire" aria-pressed="false">Wireframe</button>
+        </div>
+        <button class="hbtn" id="hFill" type="button">Isi data contoh</button>
+      </div>
+      <div style="margin-top:8px">
+        <label for="hJump" class="kicker" style="display:block;margin-bottom:4px">Lompat ke layar (untuk penilai, tercatat di log)</label>
+        <select id="hJump">
+          <option value="">Pilih layar…</option>
+          <option value="entry">L0 · Grup WA panitia (titik masuk)</option>
+          <option value="home">L1 · Beranda &amp; kamus Titik Aman</option>
+          <option value="form">L2 · Formulir pendaftaran</option>
+          <option value="list">L3 · Pantauan Saya</option>
+          <option value="bot">L4–L5 · Chat Pemantau (WhatsApp)</option>
+        </select>
+      </div>
+    </section>
+
+    <section>
+      <h2>Jejak sesi</h2>
+      <div class="stats">
+        <div class="stat"><b id="stTime">0:00</b><span>durasi</span></div>
+        <div class="stat"><b id="stMis">0</b><span>klik non-tombol</span></div>
+        <div class="stat"><b id="stErr">0</b><span>error form</span></div>
+      </div>
+      <div class="log" id="log" aria-live="polite" style="margin-top:8px"></div>
+    </section>
+
+    <section>
+      <h2>Catatan pengamat</h2>
+      <textarea id="obs" placeholder="Di mana penguji berhenti atau bertanya? Tulis kata-katanya apa adanya."></textarea>
+      <div class="row" style="margin-top:8px">
+        <button class="hbtn" id="hSum" type="button">Buat ringkasan sesi</button>
+        <button class="hbtn" id="hCopy" type="button">Salin ringkasan</button>
+      </div>
+      <div class="summary" id="summary" hidden></div>
+    </section>
+    <p class="kicker">Prototipe untuk uji alur. Tidak ada database, scraper, atau pengiriman WhatsApp sungguhan. Layanan mahasiswa, bukan sistem resmi MIFM/ITS.</p>
+  </aside>
+
+  <main class="stage">
+    <button class="hbtn reopen" id="hShow" type="button">Panel uji</button>
+    <div class="phone" id="phone">
+      <div class="screen" id="screen"></div>
+      <button class="notif" id="notif" type="button" aria-live="polite"></button>
+      <div class="toast" id="toast" role="status"></div>
+    </div>
+    <p class="caption">Clickable prototype · Pemantau Status MIFM · ukuran layar 390 × 844</p>
+  </main>
+</div>
+
+<script>
+(function(){
+"use strict";
+
+/* ---------- icons ---------- */
+const I = {
+  back:'<svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M15 18l-6-6 6-6"/></svg>',
+  lock:'<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="4" y="11" width="16" height="10" rx="2"/><path d="M8 11V7a4 4 0 018 0v4"/></svg>',
+  unlock:'<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="4" y="11" width="16" height="10" rx="2"/><path d="M8 11V7a4 4 0 017.5-2"/></svg>',
+  x:'<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.8" stroke-linecap="round" aria-hidden="true"><path d="M6 6l12 12M18 6L6 18"/></svg>',
+  clock:'<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/></svg>',
+  check:'<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 12.5l4.5 4.5L19 7.5"/></svg>',
+  warn:'<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" style="flex:none;margin-top:1px"><path d="M12 3l10 18H2L12 3z"/><path d="M12 10v5M12 18v.01"/></svg>',
+  info:'<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" aria-hidden="true" style="flex:none;margin-top:1px"><circle cx="12" cy="12" r="9"/><path d="M12 11v6M12 7.5v.01"/></svg>',
+  bell:'<svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.3" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M18 8a6 6 0 10-12 0c0 7-3 8-3 8h18s-3-1-3-8"/><path d="M10.5 20a1.8 1.8 0 003 0"/></svg>',
+  plus:'<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" aria-hidden="true"><path d="M12 5v14M5 12h14"/></svg>',
+  chat:'<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M21 11.5a8.4 8.4 0 01-12.3 7.5L3 21l2-5.6A8.4 8.4 0 1121 11.5z"/></svg>',
+  mic:'<svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="#54656f" stroke-width="2" stroke-linecap="round" aria-hidden="true"><rect x="9" y="3" width="6" height="11" rx="3"/><path d="M5 11a7 7 0 0014 0M12 18v3"/></svg>'
+};
+
+/* ---------- helpers ---------- */
+const $ = s => document.querySelector(s);
+const esc = s => String(s==null?'':s).replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+const HARI = ['Minggu','Senin','Selasa','Rabu','Kamis','Jumat','Sabtu'];
+const BLN = ['Jan','Feb','Mar','Apr','Mei','Jun','Jul','Agu','Sep','Okt','Nov','Des'];
+function fmtDate(iso){
+  if(!iso) return '-';
+  const p = iso.split('-').map(Number); if(p.length<3||!p[0]) return esc(iso);
+  const d = new Date(p[0], p[1]-1, p[2]);
+  return HARI[d.getDay()]+', '+d.getDate()+' '+BLN[d.getMonth()]+' '+d.getFullYear();
+}
+function fmtShort(iso){
+  if(!iso) return '-';
+  const p = iso.split('-').map(Number); if(p.length<3||!p[0]) return esc(iso);
+  return p[2]+' '+BLN[p[1]-1];
+}
+// H-4 deadline (aturan form DITMAWA: pengajuan maksimal 4 hari sebelum kegiatan)
+function hMinus4(iso){
+  const p = (iso||'').split('-').map(Number); if(p.length<3||!p[0]) return '-';
+  const d = new Date(p[0], p[1]-1, p[2]-4);
+  return HARI[d.getDay()]+', '+d.getDate()+' '+BLN[d.getMonth()];
+}
+const fmtTime = t => t ? t.replace(':','.') : '-';
+const fmtWA = w => { const d=(w||'').replace(/\D/g,''); return d.length>8 ? d.slice(0,4)+'-'+d.slice(4,8)+'-'+d.slice(8) : (w||''); };
+
+const ROOMS = ['Teater A','Hall Lantai 1 TW 1','TW1-201','TW2-Ruang Pameran Lantai 1','TW3-502','U-106 FSAD','IE 201 - LAB MM','Auditorium'];
+const SAMPLE = {wa:'0812 3456 7890', ajuan:[
+  {nama:'Seminar Nasional 2026', ruang:'Teater A', tgl:'2026-11-24', mulai:'08:00', selesai:'12:00', nomor:''},
+  {nama:'Rapat Koordinasi Panitia', ruang:'TW1-201', tgl:'2026-11-27', mulai:'16:00', selesai:'18:00', nomor:''}
+]};
+const blankAjuan = () => ({nama:'', ruang:'', tgl:'', mulai:'', selesai:'', nomor:''});
+
+/* simulated clock for each concierge check */
+const CLOCK = [
+  {day:'Senin, 16 Nov', time:'11.05', label:'Senin 16 Nov · 11.05 WIB (baru daftar)'},
+  {day:'Senin, 16 Nov', time:'13.30', label:'Senin 16 Nov · cek 13.30 WIB'},
+  {day:'Selasa, 17 Nov', time:'10.30', label:'Selasa 17 Nov · cek 10.30 WIB'},
+  {day:'Rabu, 18 Nov', time:'13.30', label:'Rabu 18 Nov · cek 13.30 WIB'}
+];
+const SCREEN_NAME = {entry:'L0 Grup WA panitia', home:'L1 Beranda', form:'L2 Formulir', list:'L3 Pantauan Saya', lookup:'L3 Cek nomor WA', bot:'L4–5 Chat Pemantau (WA)'};
+
+/* ---------- state ---------- */
+let S;
+function fresh(){
+  return {screen:'entry', wa:'', ajuan:[blankAjuan()], errors:{}, formError:'', registered:false,
+    sim:0, branch:null, seenBranches:{}, expanded:{}, justRegistered:false, lookupWA:'', lookupErr:'',
+    stats:{misclick:{}, formErr:0, formErrFields:[], jumps:0, path:[], dwell:{}}, log:[], t0:Date.now(), tEnter:Date.now(),
+    tasks:{1:false,2:false,3:false}, ended:false};
+}
+S = fresh();
+
+/* ---------- logging ---------- */
+function clockStr(){ const s=Math.floor((Date.now()-S.t0)/1000); return Math.floor(s/60)+':'+String(s%60).padStart(2,'0'); }
+function log(msg, cls){
+  S.log.push({t:clockStr(), msg, cls:cls||''});
+  const el = $('#log');
+  const line = document.createElement('div');
+  if(cls) line.className = cls;
+  line.textContent = S.log[S.log.length-1].t+'  '+msg;
+  el.appendChild(line); el.scrollTop = el.scrollHeight;
+}
+function closeDwell(){
+  const now=Date.now(), k=S.screen;
+  S.stats.dwell[k]=(S.stats.dwell[k]||0)+(now-S.tEnter); S.tEnter=now;
+}
+function updateStats(){
+  $('#stTime').textContent = clockStr();
+  $('#stMis').textContent = Object.values(S.stats.misclick).reduce((a,b)=>a+b,0);
+  $('#stErr').textContent = S.stats.formErr;
+  document.querySelectorAll('#taskList li').forEach(li=>li.classList.toggle('done', !!S.tasks[li.dataset.t]));
+}
+setInterval(updateStats, 1000);
+function task(n){ if(!S.tasks[n]){ S.tasks[n]=true; log('Tugas '+n+' tercapai','s'); updateStats(); } }
+
+/* ---------- navigation ---------- */
+function go(screen, opts){
+  opts=opts||{};
+  if(screen!==S.screen){ closeDwell(); }
+  if(S.screen==='form' && screen!=='form' && S.registered){
+    S.ajuan = S.ajuan.filter(a=>a.nama.trim()||a.ruang.trim()||a.tgl);
+    if(!S.ajuan.length) S.ajuan=[blankAjuan()];
+  }
+  S.screen = screen;
+  if(S.stats.path[S.stats.path.length-1]!==screen) S.stats.path.push(screen);
+  log('→ '+SCREEN_NAME[screen]+(opts.via?' ('+opts.via+')':''));
+  if(screen==='list' && S.registered) task(2);
+  render();
+  const sc = document.querySelector('#screen .scroll'); if(sc && !opts.keepScroll) sc.scrollTop = 0;
+  if(screen==='bot') scrollChatEnd();
+}
+function toast(msg){ const t=$('#toast'); t.textContent=msg; t.classList.add('show'); clearTimeout(toast._h); toast._h=setTimeout(()=>t.classList.remove('show'),2600); }
+function notify(title, text){
+  const n=$('#notif');
+  n.innerHTML = '<div class="avatar" style="background:#0d6b57;color:#fff;width:34px;height:34px">'+I.bell+'</div><div><div class="app">WhatsApp · baru saja</div><b>'+esc(title)+'</b><span class="t">'+esc(text)+'</span></div>';
+  n.classList.add('show');
+  clearTimeout(notify._h); notify._h=setTimeout(()=>n.classList.remove('show'),6000);
+}
+$('#notif').addEventListener('click', ()=>{ $('#notif').classList.remove('show'); log('Klik notifikasi WhatsApp'); go('bot',{via:'notifikasi'}); });
+
+/* ---------- status model ---------- */
+function statusOf(i){
+  // returns {key, label, why, locked}
+  const first = i===0;
+  if(S.sim===0) return {key:'wait', label:'Menunggu cek pertama', why:'Dicocokkan ke MIFM pada cek pukul 13.30 WIB.'};
+  if(!first){
+    if(S.sim===1) return {key:'hidden', label:'Belum tampil di MIFM', why:'Berkas kemungkinan belum diinput DITMAWA. Tetap dipantau.'};
+    return {key:'diajukan', label:'Diajukan', why:'Berkas masuk DITMAWA. Belum aman.'};
+  }
+  if(S.sim===1) return {key:'diajukan', label:'Diajukan', why:'Berkas masuk DITMAWA. Belum aman.'};
+  if(S.sim===2) return {key:'terbit', label:'Surat Terbit', why:'Berkas di BMA. Ruangan BELUM terkunci.'};
+  if(S.branch==='A') return {key:'setuju', label:'Disetujui', why:'Ruangan RESMI TERKUNCI. Pemantauan selesai.'};
+  if(S.branch==='C') return {key:'batal', label:'Dibatalkan', why:'Ajuan batal. Cari ruang atau tanggal pengganti.'};
+  return {key:'terbit', label:'Surat Terbit', why:'Berkas di BMA. Ruangan BELUM terkunci.', rival:true};
+}
+function pill(key, label){
+  const cls = {wait:'p-wait', hidden:'p-hidden', diajukan:'p-diajukan', terbit:'p-terbit', setuju:'p-setuju', batal:'p-batal'}[key];
+  const ic = key==='setuju'?I.lock : key==='batal'?I.x : (key==='wait'||key==='hidden')?'' : I.unlock;
+  return '<span class="pill '+cls+'">'+ic+esc(label)+'</span>';
+}
+function history(i){
+  const h=[]; const first=i===0;
+  h.push({t:CLOCK[0].label, s:'Didaftarkan untuk dipantau'});
+  if(S.sim>=1) h.push({t:CLOCK[1].label, s: first?'Ditemukan di MIFM: Diajukan':'Belum tampil di MIFM'});
+  if(S.sim>=2) h.push({t:CLOCK[2].label, s: first?'Diajukan → Surat Terbit':'Tampil di MIFM: Diajukan'});
+  if(S.sim>=3 && first){
+    h.push({t:CLOCK[3].label, s: S.branch==='A'?'Surat Terbit → Disetujui (selesai dipantau)': S.branch==='C'?'Surat Terbit → Dibatalkan':'Peringatan: muncul ajuan lain di slot yang sama'});
+  }
+  return h;
+}
+
+/* ---------- screens ---------- */
+const R = {};
+
+R.entry = () => `
+  <div class="wa-head">
+    <div class="avatar" style="background:#dfe5e7;color:#2f4f4f">SN</div>
+    <div class="wa-title"><b>Panitia Seminar Nasional 2026</b><span>Dinda, Raka, Kamu</span></div>
+  </div>
+  <div class="scroll wa-wall"><div class="wa-list">
+    <div class="day">Senin, 16 Nov</div>
+    <div class="bub"><div class="who" style="color:#c2410c">Dinda · Sekretaris</div>
+      <p>Surat peminjaman Teater A buat Seminar Nasional (Selasa 24 Nov, 08.00–12.00) udah aku serahin ke DITMAWA. Form Google Sheets-nya juga udah diisi.</p><span class="ts">10.42</span></div>
+    <div class="bub"><div class="who" style="color:#1d4ed8">Raka · Koor Acara</div>
+      <p>Sip. Kamu yang pegang urusan ruangan ya. Biar ga bolak-balik ngecek MIFM, daftarin aja di sini, nanti kabar statusnya masuk WA:</p>
+      <button class="linkcard" type="button" data-act="openService" data-label="Tautan layanan di grup WA">
+        <b>Pemantau Status MIFM</b>
+        <span>Daftar sekali, kabar status pengajuan ruangan masuk ke WhatsApp.</span>
+        <u>pemantau-mifm (tautan layanan)</u>
+      </button>
+      <span class="ts">10.44</span></div>
+    <div class="bub out"><p>Oke, aku daftarin sekarang.</p><span class="ts">10.58 ✓✓</span></div>
+  </div></div>
+  <div class="wa-input"><div>Ketik pesan</div>${I.mic}</div>`;
+
+R.home = () => `
+  <div class="appbar">
+    <div class="brand"><span class="logo-mark">${I.bell}</span>Pemantau Status MIFM</div>
+    <button class="linkbtn" type="button" data-act="toList" data-label="Pantauan Saya (header)">Pantauan Saya</button>
+  </div>
+  <div class="scroll"><div class="pad">
+    <div class="hero">
+      <h1>Kabar status ruangan MIFM, langsung ke WhatsApp-mu</h1>
+      <p>Daftarkan pengajuanmu sekali. Kami cek MIFM 3 kali tiap hari kerja dan mengabarimu begitu statusnya berubah.</p>
+    </div>
+    <button class="btn btn-primary" type="button" data-act="toForm" data-label="Daftarkan pengajuan (CTA)">${I.plus} Daftarkan pengajuan</button>
+    <div class="infostrip">${I.clock}<div>Jadwal cek: <span class="times">10.30 · 13.30 · 15.30</span> WIB, Senin–Jumat. Tidak ada perubahan, tidak ada pesan.</div></div>
+    <section class="card">
+      <h2 class="sec-title">Kapan ruanganmu benar-benar aman?</h2>
+      <ul class="dict">
+        <li>${pill('diajukan','Diajukan')}<span><span class="lock-note">Belum aman</span>Berkas baru masuk DITMAWA.</span></li>
+        <li>${pill('terbit','Surat Terbit')}<span><span class="lock-note">Belum terkunci</span>Berkas sudah di BMA, ruangan masih bisa tergeser.</span></li>
+        <li>${pill('setuju','Disetujui')}<span><span class="lock-note">Aman, terkunci</span>Ruangan resmi dipakai acaramu.</span></li>
+        <li>${pill('batal','Dibatalkan')}<span><span class="lock-note">Cari pengganti</span>Ajuan batal, siapkan ruang atau tanggal lain.</span></li>
+      </ul>
+    </section>
+    <p class="fine">Tanpa akun. Nomor WhatsApp-mu hanya dipakai untuk mengirim kabar status. Layanan mahasiswa, bukan sistem resmi MIFM/ITS.</p>
+  </div></div>`;
+
+function ajuanCard(a, i){
+  const e = S.errors[i]||{};
+  const f = (k,lab,inner,help,opt) => `<div class="field${e[k]?' err':''}"><label for="a${i}_${k}">${lab}${opt?' <span class="opt">(opsional)</span>':''}</label>${inner}${e[k]?'<span class="errmsg">'+esc(e[k])+'</span>':''}${help?'<span class="help">'+help+'</span>':''}</div>`;
+  return `<section class="card ajuan" data-i="${i}">
+    <div class="ajuan-head"><h3>Pengajuan ${i+1}</h3>${i>0?'<button class="xbtn" type="button" data-act="removeAjuan" data-i="'+i+'" data-label="Hapus pengajuan">Hapus</button>':''}</div>
+    ${f('nama','Nama kegiatan','<input id="a'+i+'_nama" data-k="nama" data-i="'+i+'" value="'+esc(a.nama)+'" placeholder="mis. Seminar Nasional 2026" autocomplete="off">','Tulis sama seperti di form DITMAWA. Nama ini yang tampil di MIFM.')}
+    ${f('ruang','Ruangan','<input id="a'+i+'_ruang" list="rooms" data-k="ruang" data-i="'+i+'" value="'+esc(a.ruang)+'" placeholder="Ketik atau pilih ruangan" autocomplete="off">','Sesuai daftar ruang di MIFM.')}
+    ${f('tgl','Tanggal kegiatan','<input id="a'+i+'_tgl" type="date" data-k="tgl" data-i="'+i+'" value="'+esc(a.tgl)+'">')}
+    <div class="two">
+      ${f('mulai','Jam mulai','<input id="a'+i+'_mulai" type="time" data-k="mulai" data-i="'+i+'" value="'+esc(a.mulai)+'">')}
+      ${f('selesai','Jam selesai','<input id="a'+i+'_selesai" type="time" data-k="selesai" data-i="'+i+'" value="'+esc(a.selesai)+'">')}
+    </div>
+    ${f('nomor','Nomor ajuan MIFM','<input id="a'+i+'_nomor" inputmode="numeric" data-k="nomor" data-i="'+i+'" value="'+esc(a.nomor)+'" placeholder="Kosongkan jika belum ada">','Tertulis di detail jadwal MIFM. Biasanya belum ada saat baru mengajukan.',true)}
+  </section>`;
+}
+R.form = () => `
+  <div class="appbar"><button class="backbtn" type="button" data-act="toHome" data-label="Kembali dari formulir">${I.back}Kembali</button><b style="font-size:15px">Daftarkan pengajuan</b><span style="width:70px"></span></div>
+  <div class="scroll"><form class="pad" id="regForm" novalidate>
+    <div class="callout">${I.info}<span>Tidak perlu nama ormawa: kolom unit di MIFM hanya menampilkan DITMAWA. Kami mencocokkan lewat nama kegiatan, ruangan, tanggal, dan jam.</span></div>
+    ${S.formError?'<div class="formerr" role="alert">'+esc(S.formError)+'</div>':''}
+    <section class="card"><div class="field${S.errors.wa?' err':''}">
+      <label for="waInput">Nomor WhatsApp untuk kabar status</label>
+      <input id="waInput" type="tel" inputmode="tel" value="${esc(S.wa)}" placeholder="08xx-xxxx-xxxx" autocomplete="tel">
+      ${S.errors.wa?'<span class="errmsg">'+esc(S.errors.wa)+'</span>':''}
+      <span class="help">Satu nomor bisa memantau banyak pengajuan.</span>
+    </div></section>
+    ${S.ajuan.map(ajuanCard).join('')}
+    <button class="addbtn" type="button" data-act="addAjuan" data-label="Tambah pengajuan lain">+ Tambah pengajuan lain</button>
+    <button class="btn btn-primary" type="submit" data-act="submit" data-label="Mulai pantau (submit)">Mulai pantau via WhatsApp</button>
+    <p class="fine" style="text-align:center">Konfirmasi pertama dikirim ke WhatsApp setelah cek berikutnya.</p>
+  </form></div>
+  <datalist id="rooms">${ROOMS.map(r=>'<option value="'+esc(r)+'">').join('')}</datalist>`;
+
+function simBar(where){
+  const c = CLOCK[Math.min(S.sim,3)];
+  let body='';
+  if(S.sim<2){
+    const nxt = CLOCK[S.sim+1];
+    body = `<button class="simbtn" type="button" data-act="simNext" data-label="Simulasi: cek berikutnya">Lompat ke cek berikutnya (${esc(nxt.day)} ${esc(nxt.time)})</button>`;
+  } else if(S.sim===2){
+    body = `<div class="simgrid">
+      <button class="simbtn" type="button" data-act="simBranch" data-b="A" data-label="Simulasi cabang A: Disetujui">Cek Rabu 13.30 · status jadi Disetujui</button>
+      <button class="simbtn alt" type="button" data-act="simBranch" data-b="B" data-label="Simulasi cabang B: Pesaing slot">Cek Rabu 13.30 · muncul pesaing slot</button>
+      <button class="simbtn alt" type="button" data-act="simBranch" data-b="C" data-label="Simulasi cabang C: Dibatalkan">Cek Rabu 13.30 · status jadi Dibatalkan</button></div>`;
+  } else {
+    body = `<button class="simbtn alt" type="button" data-act="simRetry" data-label="Simulasi: coba cabang lain">Coba cabang lain (kembali ke Surat Terbit)</button>`;
+  }
+  return `<div class="simbar" aria-label="Kontrol simulasi waktu"><div class="simlabel"><span>Simulasi waktu, bukan bagian aplikasi</span><span>${esc(c.day)} ${esc(c.time)}</span></div>${body}</div>`;
+}
+
+R.list = () => {
+  if(!S.registered) return R.lookupEmpty();
+  const n=S.ajuan.length;
+  return `
+  <div class="appbar"><button class="backbtn" type="button" data-act="toHome" data-label="Beranda dari Pantauan Saya">${I.back}Beranda</button><b style="font-size:15px">Pantauan Saya</b><span class="times" style="font-size:11.5px;color:var(--ink-2)">${esc(fmtWA(S.wa))}</span></div>
+  <div class="scroll"><div class="pad" style="gap:14px">
+    ${S.justRegistered && S.sim===0 ? `<div class="banner-ok" role="status">${I.check}<div><b>Pendaftaran diterima.</b> ${n} pengajuan masuk antrean pantau. Konfirmasi pertama dikirim ke WhatsApp ${esc(fmtWA(S.wa))} setelah cek pukul 13.30 WIB.</div></div>`:''}
+    <p class="fine">${n} pengajuan dipantau · cek terakhir: ${S.sim===0?'belum ada':esc(CLOCK[S.sim].label)}</p>
+    ${S.ajuan.map((a,i)=>{
+      const st=statusOf(i); const open=!!S.expanded[i];
+      return `<article class="card mcard">
+        <h3>${esc(a.nama)}</h3>
+        <div class="meta"><span>${esc(a.ruang)}</span><span>${fmtDate(a.tgl)} · ${fmtTime(a.mulai)}–${fmtTime(a.selesai)} WIB</span></div>
+        <div class="statusline">
+          ${pill(st.key, st.label)}
+          <span class="why">${esc(st.why)}</span>
+          ${st.rival?'<div class="warnchip">'+I.warn+'<span>Ada ajuan lain di slot yang sama. Konfirmasi ke BMA di jam layanan.</span></div>':''}
+        </div>
+        <button class="histbtn" type="button" data-act="toggleHist" data-i="${i}" aria-expanded="${open}" data-label="Riwayat status #${i+1}">${open?'Tutup riwayat':'Lihat riwayat status'}</button>
+        ${open?'<ul class="hist">'+history(i).map(h=>'<li><time>'+esc(h.t)+'</time>'+esc(h.s)+'</li>').join('')+'</ul>':''}
+      </article>`;}).join('')}
+    <button class="btn btn-ghost btn-sm" type="button" data-act="toBot" data-label="Buka chat Pemantau di WhatsApp">${I.chat} Buka chat Pemantau di WhatsApp</button>
+    <button class="btn btn-ghost btn-sm" type="button" data-act="toForm" data-label="Tambah pengajuan dari Pantauan Saya">${I.plus} Tambah pengajuan</button>
+  </div></div>
+  ${simBar('list')}`;
+};
+
+R.lookupEmpty = () => `
+  <div class="appbar"><button class="backbtn" type="button" data-act="toHome" data-label="Beranda dari cek nomor">${I.back}Beranda</button><b style="font-size:15px">Pantauan Saya</b><span style="width:70px"></span></div>
+  <div class="scroll"><div class="pad">
+    <p style="margin:0">Masukkan nomor WhatsApp yang kamu pakai saat mendaftar.</p>
+    <div class="field${S.lookupErr?' err':''}"><label for="lookupWA">Nomor WhatsApp</label><input id="lookupWA" type="tel" inputmode="tel" value="${esc(S.lookupWA)}" placeholder="08xx-xxxx-xxxx">${S.lookupErr?'<span class="errmsg">'+esc(S.lookupErr)+'</span>':''}</div>
+    <button class="btn btn-primary" type="button" data-act="doLookup" data-label="Lihat pantauan (cek nomor)">Lihat pantauan</button>
+    <div class="empty">Belum ada pengajuan terdaftar untuk nomor ini.<br><button class="linkbtn" type="button" data-act="toForm" data-label="Daftarkan dari halaman kosong">Daftarkan pengajuan</button></div>
+  </div></div>`;
+
+/* WhatsApp bot messages built from state */
+function rowsFor(a){
+  return '<table><tr><td>Acara</td><td><b>'+esc(a.nama)+'</b></td></tr><tr><td>Ruang</td><td>'+esc(a.ruang)+'</td></tr><tr><td>Waktu</td><td>'+fmtShort(a.tgl)+', '+fmtTime(a.mulai)+'–'+fmtTime(a.selesai)+'</td></tr></table>';
+}
+function tag(key,label){
+  const c={diajukan:['#eceff2','#566372'],terbit:['#fff2d6','#8a5a00'],setuju:['#dff3e6','#1f6b3c'],batal:['#fde7e5','#b42318']}[key];
+  return '<span class="tag" style="background:'+c[0]+';color:'+c[1]+'">'+esc(label)+'</span>';
+}
+const BMA = 'Jam efektif BMA: <b>10.00–11.00</b> & <b>13.00–15.00</b> WIB (istirahat 11.00–13.00).';
+function botMessages(){
+  const a=S.ajuan[0], rest=S.ajuan.slice(1), out=[];
+  out.push({day:'Senin, 16 Nov'});
+  out.push({sys:'Pendaftaran pukul 11.05 diterima. Belum ada pesan sampai cek berikutnya.'});
+  if(S.sim>=1){
+    out.push({ts:'13.31', html:
+      '<p><b>Pantauan aktif</b> untuk '+S.ajuan.length+' pengajuan.</p>'+
+      '<p>1) Ditemukan di MIFM '+tag('diajukan','DIAJUKAN')+'</p>'+rowsFor(a)+
+      '<div class="box info">Arti status: berkas masuk DITMAWA. <b>Belum aman.</b></div>'+
+      '<div class="box warn"><b>Cek slot:</b> belum ada ajuan lain di '+esc(a.ruang)+' pada jam ini. Tapi slot yang tampak kosong di MIFM belum tentu aman sampai status <b>DISETUJUI</b>. Untuk acara besar, siapkan ruang cadangan.</div>'+
+      (rest.length? rest.map((r,j)=>'<p>'+(j+2)+') <b>'+esc(r.nama)+'</b> ('+esc(r.ruang)+', '+fmtShort(r.tgl)+'): belum tampil di MIFM. Biasanya karena belum diinput DITMAWA. Tetap kami pantau.</p>').join('') : '')+
+      '<p>Kami cek 3x tiap hari kerja (10.30, 13.30, 15.30). Kabar hanya dikirim kalau ada perubahan.</p>',
+      quick:'Lihat semua pantauan'});
+    out.push({sys:'Senin 15.30: tidak ada perubahan, tidak ada pesan dikirim.'});
+  }
+  if(S.sim>=2){
+    out.push({day:'Selasa, 17 Nov'});
+    out.push({ts:'10.32', html:
+      '<p><b>Status berubah</b> · cek 10.30</p>'+rowsFor(a)+
+      '<p>'+tag('diajukan','DIAJUKAN')+' → '+tag('terbit','SURAT TERBIT')+'</p>'+
+      '<div class="box warn"><b>Ruangan BELUM terkunci.</b> Berkas sudah di BMA, tapi ruangan masih bisa tergeser sampai status DISETUJUI.</div>'+
+      '<p><b>Langkah berikutnya:</b> belum perlu ke BMA. Kami lanjut pantau. Kalau ada kendala, hubungi BMA di jam efektif.</p><p class="fine" style="font-size:12.5px">'+BMA+'</p>'+
+      (rest.length? '<p>Info lain: '+rest.map(r=>'<b>'+esc(r.nama)+'</b>').join(', ')+' sekarang sudah tampil di MIFM '+tag('diajukan','DIAJUKAN')+'</p>':'')});
+    out.push({sys:'Selasa 13.30, 15.30 & Rabu 10.30: tidak ada perubahan, tidak ada pesan dikirim.'});
+  }
+  if(S.sim>=3){
+    out.push({day:'Rabu, 18 Nov'});
+    if(S.branch==='A') out.push({ts:'13.32', html:
+      '<p><b>Status berubah</b> · cek 13.30</p>'+rowsFor(a)+
+      '<p>'+tag('terbit','SURAT TERBIT')+' → '+tag('setuju','DISETUJUI')+'</p>'+
+      '<div class="box ok"><b>Ruangan RESMI TERKUNCI</b> untuk acaramu. Ini titik aman.</div>'+
+      '<p><b>Langkah berikutnya:</b> simpan tangkapan layar detail jadwal di MIFM sebagai bukti untuk koordinasi teknis acara.</p>'+
+      '<p>Pemantauan <b>'+esc(a.nama)+'</b> selesai. Pengajuan lain tetap dipantau.</p>', quick:'Lihat semua pantauan'});
+    if(S.branch==='B') out.push({ts:'13.32', html:
+      '<p><b>Peringatan dini slot</b> · cek 13.30</p>'+rowsFor(a)+
+      '<p>Statusmu masih '+tag('terbit','SURAT TERBIT')+' (belum terkunci)</p>'+
+      '<div class="box danger"><b>Muncul 1 ajuan lain</b> di '+esc(a.ruang)+', '+fmtShort(a.tgl)+', pada jam yang beririsan dengan acaramu. MIFM tidak menampilkan nama pengajunya.</div>'+
+      '<p><b>Langkah berikutnya:</b></p><p>1. Konfirmasi ke BMA <b>hari ini 13.00–15.00 WIB</b>. Sebutkan nama kegiatan, ruang, dan tanggal.<br>2. Siapkan ruang atau jam cadangan.</p>'+
+      '<p class="fine" style="font-size:12.5px">'+BMA+'</p>', quick:'Lihat semua pantauan'});
+    if(S.branch==='C') out.push({ts:'13.32', html:
+      '<p><b>Status berubah</b> · cek 13.30</p>'+rowsFor(a)+
+      '<p>'+tag('terbit','SURAT TERBIT')+' → '+tag('batal','DIBATALKAN')+'</p>'+
+      '<div class="box danger"><b>Ruangan tidak lagi dipesan untukmu.</b></div>'+
+      '<p><b>Langkah berikutnya:</b></p><p>1. Cari ruang lain yang kosong di MIFM.<br>2. Ajukan ulang ke DITMAWA. Batas pengajuan H-4: <b>'+hMinus4(a.tgl)+'</b>.<br>3. Tanyakan alasan pembatalan ke BMA di jam efektif.</p>'+
+      '<p class="fine" style="font-size:12.5px">'+BMA+'</p>', quick:'Lihat semua pantauan'});
+  }
+  return out;
+}
+R.bot = () => {
+  const msgs = S.registered ? botMessages() : [];
+  return `
+  <div class="wa-head">
+    <button class="back" type="button" data-act="toList" data-label="Kembali dari chat WA" aria-label="Kembali ke Pantauan Saya">${I.back}</button>
+    <div class="avatar" style="background:#0d6b57;color:#fff">${I.bell}</div>
+    <div class="wa-title"><b>Pemantau Status MIFM</b><span>Akun layanan · balasan otomatis</span></div>
+  </div>
+  <div class="scroll wa-wall" id="chat"><div class="wa-list">
+    ${!S.registered?'<div class="sysnote">Belum ada pengajuan terdaftar. Daftar dulu lewat tautan layanan.</div>':''}
+    ${msgs.map(m=> m.day?'<div class="day">'+esc(m.day)+'</div>' : m.sys?'<div class="sysnote">'+esc(m.sys)+'</div>' :
+      '<div class="bub">'+m.html+'<span class="ts">'+m.ts+'</span>'+(m.quick?'<button class="quick" type="button" data-act="toList" data-label="Tombol pesan: '+esc(m.quick)+'">'+esc(m.quick)+'</button>':'')+'</div>').join('')}
+    <div id="typingSlot"></div>
+  </div></div>
+  ${S.registered ? simBar('bot') : '<div class="wa-input"><div>Ketik pesan</div>'+I.mic+'</div>'}`;
+};
+
+function render(){
+  $('#screen').innerHTML = R[S.screen]();
+  updateStats();
+}
+function scrollChatEnd(){ const c=$('#chat'); if(c) c.scrollTop=c.scrollHeight; }
+
+/* ---------- form logic ---------- */
+function readForm(){
+  const wa=$('#waInput'); if(wa) S.wa=wa.value;
+  document.querySelectorAll('[data-k]').forEach(inp=>{ const i=+inp.dataset.i; if(S.ajuan[i]) S.ajuan[i][inp.dataset.k]=inp.value; });
+}
+function validate(){
+  const errs={}, fields=[];
+  const digits=(S.wa||'').replace(/\D/g,'');
+  if(!digits) {errs.wa='Isi nomor WhatsApp supaya kabar bisa dikirim.'; fields.push('Nomor WA kosong');}
+  else if(!/^(08|628)\d{7,12}$/.test(digits)) {errs.wa='Format nomor belum benar. Contoh: 0812-3456-7890.'; fields.push('Format nomor WA');}
+  S.ajuan.forEach((a,i)=>{
+    const e={};
+    if(!a.nama.trim()) {e.nama='Nama kegiatan wajib diisi.'; fields.push('#'+(i+1)+' nama kegiatan');}
+    if(!a.ruang.trim()) {e.ruang='Pilih atau ketik ruangan.'; fields.push('#'+(i+1)+' ruangan');}
+    if(!a.tgl) {e.tgl='Pilih tanggal kegiatan.'; fields.push('#'+(i+1)+' tanggal');}
+    if(!a.mulai) {e.mulai='Isi jam mulai.'; fields.push('#'+(i+1)+' jam mulai');}
+    if(!a.selesai) {e.selesai='Isi jam selesai.'; fields.push('#'+(i+1)+' jam selesai');}
+    else if(a.mulai && a.selesai<=a.mulai) {e.selesai='Jam selesai harus setelah jam mulai.'; fields.push('#'+(i+1)+' jam selesai ≤ mulai');}
+    if(Object.keys(e).length) errs[i]=e;
+  });
+  return {errs, fields};
+}
+function submitForm(){
+  readForm();
+  const {errs, fields} = validate();
+  S.errors=errs;
+  if(fields.length){
+    S.formError='Ada '+fields.length+' isian yang perlu dilengkapi. Cek kolom bertanda merah.';
+    S.stats.formErr++; S.stats.formErrFields.push(...fields);
+    log('Error validasi: '+fields.join(', '),'m');
+    render();
+    const firstErr=document.querySelector('.field.err input'); if(firstErr) firstErr.focus();
+    return;
+  }
+  S.formError=''; S.registered=true; S.justRegistered=true; S.sim=0; S.branch=null; S.expanded={};
+  log('Pendaftaran berhasil: '+S.ajuan.length+' pengajuan','s');
+  task(1);
+  go('list',{via:'submit'});
+}
+
+/* ---------- simulation ---------- */
+function typingThen(fn){
+  const slot=$('#typingSlot');
+  if(slot && S.screen==='bot'){ slot.innerHTML='<div class="typing">Pemantau Status MIFM sedang mengetik…</div>'; scrollChatEnd(); setTimeout(fn, 650); }
+  else fn();
+}
+function afterSim(title, text){
+  if(S.screen==='bot'){ render(); scrollChatEnd(); }
+  else { render(); notify(title, text); }
+}
+function simNext(){
+  typingThen(()=>{
+    S.sim++; S.justRegistered=false;
+    const a=S.ajuan[0];
+    log('Simulasi waktu → '+CLOCK[S.sim].label);
+    if(S.sim===1) afterSim('Pemantau Status MIFM','Pantauan aktif: '+a.nama+' ditemukan di MIFM (Diajukan).');
+    else afterSim('Pemantau Status MIFM','Status berubah: '+a.nama+' → SURAT TERBIT. Ruangan belum terkunci.');
+  });
+}
+function simBranch(b){
+  typingThen(()=>{
+    S.sim=3; S.branch=b; S.seenBranches[b]=true;
+    const a=S.ajuan[0];
+    log('Simulasi cabang '+b+(b==='A'?' (Disetujui)':b==='B'?' (Pesaing slot)':' (Dibatalkan)'));
+    if(S.seenBranches.A && S.seenBranches.B) task(3);
+    const t = b==='A'?'Status berubah: '+a.nama+' → DISETUJUI. Ruangan resmi terkunci.' : b==='B'?'Peringatan dini: ada ajuan lain di slot '+a.ruang+'.' : 'Status berubah: '+a.nama+' → DIBATALKAN.';
+    afterSim('Pemantau Status MIFM', t);
+  });
+}
+
+/* ---------- event delegation inside phone ---------- */
+const INTERACTIVE='button,a,input,select,textarea,label,summary,[data-act]';
+$('#phone').addEventListener('click', e=>{
+  const t = e.target.closest(INTERACTIVE);
+  if(!t){
+    S.stats.misclick[S.screen]=(S.stats.misclick[S.screen]||0)+1;
+    log('Klik di area non-tombol ('+SCREEN_NAME[S.screen]+')','m'); updateStats(); return;
+  }
+  const act = t.dataset && t.dataset.act;
+  if(!act) return;
+  if(act!=='submit') e.preventDefault();
+  if(t.dataset.label && act!=='submit') log('Klik: '+t.dataset.label);
+  if(S.screen==='form') readForm();
+  switch(act){
+    case 'openService': go('home',{via:'tautan grup'}); break;
+    case 'toHome': go('home'); break;
+    case 'toForm': if(S.registered && S.screen==='list'){ S.ajuan.push(blankAjuan()); } go('form'); break;
+    case 'toList': S.justRegistered = S.justRegistered && S.sim===0; go('list'); break;
+    case 'toBot': go('bot'); break;
+    case 'addAjuan': S.ajuan.push(blankAjuan()); render(); { const sc=document.querySelector('#screen .scroll'); const cards=document.querySelectorAll('.ajuan'); const last=cards[cards.length-1]; if(sc&&last) sc.scrollTop=last.offsetTop-70; const f=last&&last.querySelector('input'); if(f) f.focus({preventScroll:true}); } break;
+    case 'removeAjuan': { const i=+t.dataset.i; S.ajuan.splice(i,1); delete S.errors[i]; render(); } break;
+    case 'toggleHist': { const i=+t.dataset.i; S.expanded[i]=!S.expanded[i]; render(); } break;
+    case 'doLookup': {
+      const v=($('#lookupWA')||{}).value||''; S.lookupWA=v;
+      const d=v.replace(/\D/g,'');
+      if(!d){ S.lookupErr='Isi nomor WhatsApp dulu.'; log('Cek nomor: kosong','m'); }
+      else { S.lookupErr=''; log('Cek nomor: tidak ada data'); toast('Belum ada pengajuan untuk nomor ini.'); }
+      render(); } break;
+    case 'simNext': simNext(); break;
+    case 'simBranch': simBranch(t.dataset.b); break;
+    case 'simRetry': S.sim=2; S.branch=null; log('Simulasi: kembali ke Surat Terbit'); render(); scrollChatEnd(); break;
+  }
+});
+$('#phone').addEventListener('submit', e=>{ e.preventDefault(); log('Klik: Mulai pantau (submit)'); submitForm(); });
+// keep typed values when inputs change (so re-render on add/remove preserves them)
+$('#phone').addEventListener('input', e=>{
+  const k=e.target.dataset.k;
+  if(k){ const i=+e.target.dataset.i; if(S.ajuan[i]) S.ajuan[i][k]=e.target.value; }
+  if(e.target.id==='waInput') S.wa=e.target.value;
+  if(e.target.id==='lookupWA') S.lookupWA=e.target.value;
+});
+
+/* ---------- harness controls ---------- */
+function setView(wf){
+  document.body.classList.toggle('wf', wf);
+  $('#vProto').setAttribute('aria-pressed', String(!wf));
+  $('#vWire').setAttribute('aria-pressed', String(wf));
+}
+$('#vProto').onclick=()=>setView(false);
+$('#vWire').onclick=()=>setView(true);
+$('#hStart').onclick=()=>{
+  S=fresh(); $('#log').innerHTML=''; $('#summary').hidden=true; $('#obs').value='';
+  log('Sesi uji baru dimulai','s'); log('→ '+SCREEN_NAME.entry); S.stats.path=['entry']; render();
+};
+$('#hHide').onclick=()=>{ $('#harness').classList.add('panel-off'); $('#harness').classList.remove('sheet-open'); };
+$('#hShow').onclick=()=>{
+  const h=$('#harness');
+  if(window.matchMedia('(max-width: 900px)').matches){ h.classList.toggle('sheet-open'); h.classList.remove('panel-off'); }
+  else h.classList.remove('panel-off');
+};
+$('#hFill').onclick=()=>{
+  S.wa=SAMPLE.wa; S.ajuan=SAMPLE.ajuan.map(a=>Object.assign({},a)); S.errors={}; S.formError='';
+  log('Panel: isi data contoh (2 pengajuan)');
+  if(S.screen!=='form') go('form',{via:'panel'}); else render();
+};
+$('#hJump').onchange=e=>{
+  const v=e.target.value; if(!v) return;
+  S.stats.jumps++;
+  if((v==='list'||v==='bot') && !S.registered){
+    S.wa=SAMPLE.wa; S.ajuan=SAMPLE.ajuan.map(a=>Object.assign({},a)); S.registered=true; S.justRegistered=true;
+    log('Panel: data contoh didaftarkan agar layar bisa dibuka');
+  }
+  go(v,{via:'lompat dari panel'}); e.target.value='';
+};
+function fmtMs(ms){ const s=Math.round(ms/1000); return Math.floor(s/60)+'m '+String(s%60).padStart(2,'0')+'s'; }
+function buildSummary(){
+  closeDwell();
+  const total=Date.now()-S.t0;
+  const path=S.stats.path.map(p=>SCREEN_NAME[p].split(' ')[0]).join(' → ');
+  const dwell=Object.entries(S.stats.dwell).filter(([,v])=>v>500).map(([k,v])=>'  - '+SCREEN_NAME[k]+': '+fmtMs(v)).join('\n')||'  -';
+  const mis=Object.entries(S.stats.misclick).map(([k,v])=>'  - '+SCREEN_NAME[k]+': '+v+'x').join('\n')||'  - tidak ada';
+  const br=Object.keys(S.seenBranches).sort().join(', ')||'belum ada';
+  const d=new Date();
+  return 'RINGKASAN SESI UJI · Prototipe Pemantau Status MIFM (Q3.03)\n'+
+    'Waktu sesi: '+d.toLocaleDateString('id-ID',{day:'numeric',month:'long',year:'numeric'})+' '+d.toLocaleTimeString('id-ID',{hour:'2-digit',minute:'2-digit'})+'\n'+
+    'Durasi total: '+fmtMs(total)+'\n'+
+    'Tugas selesai: T1 daftar '+(S.tasks[1]?'✓':'✗')+' · T2 rekap '+(S.tasks[2]?'✓':'✗')+' · T3 titik aman & pesaing slot '+(S.tasks[3]?'✓':'✗')+'\n'+
+    'Jumlah pengajuan didaftarkan: '+(S.registered?S.ajuan.length:0)+'\n'+
+    'Urutan layar: '+path+'\n'+
+    'Waktu per layar:\n'+dwell+'\n'+
+    'Klik di area non-tombol (tanda ragu/salah tebak):\n'+mis+'\n'+
+    'Error validasi formulir: '+S.stats.formErr+(S.stats.formErrFields.length?' ('+[...new Set(S.stats.formErrFields)].join('; ')+')':'')+'\n'+
+    'Cabang simulasi yang dicoba: '+br+'\n'+
+    'Lompat layar lewat panel: '+S.stats.jumps+'\n'+
+    'Catatan pengamat: '+($('#obs').value.trim()||'-');
+}
+$('#hSum').onclick=()=>{ const s=$('#summary'); s.textContent=buildSummary(); s.hidden=false; log('Ringkasan dibuat','s'); };
+$('#hCopy').onclick=async()=>{
+  const txt=buildSummary(); const s=$('#summary'); s.textContent=txt; s.hidden=false;
+  try{ await navigator.clipboard.writeText(txt); toast('Ringkasan disalin.'); }
+  catch(_){ const r=document.createRange(); r.selectNodeContents(s); const sel=getSelection(); sel.removeAllRanges(); sel.addRange(r); toast('Tekan Ctrl/Cmd+C untuk menyalin.'); }
+};
+
+/* start */
+log('Sesi uji dimulai','s'); log('→ '+SCREEN_NAME.entry); S.stats.path=['entry'];
+render();
+})();
+</script>
+</body>
+</html>
